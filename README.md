@@ -1,7 +1,11 @@
+Edited by Albert Jansen, 2015
 Trainable Robotic Arm Created by Robert Svec November 2013
 
 This Arduino based project uses a robotic arm and gripper with the Adafruit analog feedback servos to provide
 a robotic arm easy training with a button press and moving the arm with your hands from position to position.
+
+2015 EDIT:
+- Code modified to let the arm function with 4 motors instead of 5.
 
 YouTube video showing this sketch in action: http://www.youtube.com/watch?v=jh5xXqiVFog
 

@@ -1,3 +1,22 @@
+/*
+  1. Eliminated motor 4 since arm is reduced in length by one motor
+  2. Further comments added for deeper understanding of the code
+  3. Increased use of variables to reduce future maintenance
+  4. Fixed EEPROM addr increase from 5 to 4
+  
+  PINS:
+      PIN A1: Analog Recieve Base Motor
+      PIN A2: Analog Recieve Lower Arm Motor
+      PIN A3: Analog Recieve Upper Arm Motor
+      PIN A5: Analog Recieve Gripper Motor - kept on A5 for motor naming consistency
+      PIN D6: Replay
+      PIN D7: Record
+      PIN D8: Base Motor
+      PIN D9: Lower Arm Motor
+      PIN D10: Upper Arm Motor
+      PIN D11: Gripper Motor
+      PIN D13: LED Indicator
+*/
 #include <Servo.h>
 #include <EEPROM.h>
 
@@ -5,31 +24,36 @@
 Servo one;
 Servo two;
 Servo three;
-Servo four;
 Servo five;
+
 // Calibration values
-int minDegOne, minDegTwo, minDegThree, minDegFour, minDegFive;
-int maxDegOne, maxDegTwo, maxDegThree, maxDegFour, maxDegFive;
-int minFeedOne, minFeedTwo, minFeedThree, minFeedFour, minFeedFive;
-int maxFeedOne, maxFeedTwo, maxFeedThree, maxFeedFour, maxFeedFive;
-int posOne, posTwo, posThree, posFour, posFive;
-int posOne1, posTwo1, posThree1, posFour1, posFive1;
+int minDegOne, minDegTwo, minDegThree, minDegFive;
+int maxDegOne, maxDegTwo, maxDegThree, maxDegFive;
+int minFeedOne, minFeedTwo, minFeedThree, minFeedFive;
+int maxFeedOne, maxFeedTwo, maxFeedThree, maxFeedFive;
+int posOne, posTwo, posThree, posFive;
+int posOne1, posTwo1, posThree1, posFive1;
+int recordButton = 7;
+int led = 13;
+int replayButton = 6;
+
 int addr = 0;
 boolean recorded = false;
 int val;
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(9600);  // initialize communication rate
   one.attach(8);
   two.attach(9);
   three.attach(10);
-  four.attach(11);
-  five.attach(12);
-  pinMode(13, OUTPUT);  // LED
-  pinMode(6, INPUT);    // Replay Button
-  pinMode(7, INPUT);    // Train Button
+  five.attach(11);
+  pinMode(led, OUTPUT);  // LED
+  pinMode(replayButton, INPUT);    // Replay Button
+  pinMode(recordButton, INPUT);    // Train Button
   delay(100);
+  
+  /* MOTOR ONE CALIBRATION */
   // One center to left
   for (int i = 90; i > -1; i--)
   {
@@ -55,6 +79,8 @@ void setup()
     delay(10);
   }
   delay(200);
+  
+  /* MOTOR TWO CALIBRATION */
   // Two up to forward
   for (int i = 90; i > -1; i--)
   {
@@ -80,6 +106,8 @@ void setup()
     delay(10);
   }
   delay(200);
+  
+  /* MOTOR THREE CALIBRATION */
   // Three up to forward
   for (int i = 90; i > -1; i--)
   {
@@ -105,31 +133,8 @@ void setup()
     delay(10);
   }
   delay(200);  
-  // Four up to forward
-  for (int i = 90; i > -1; i--)
-  {
-    four.write(i);
-    delay(10);
-  }
-  minDegFour = 0;
-  minFeedFour = analogRead(4);
-  delay(200);
-  // Four forward to backward
-  for (int i = 0; i < 181; i++)
-  {
-    four.write(i);
-    delay(10);
-  }
-  maxDegFour = 180;
-  maxFeedFour = analogRead(4);
-  delay(200);
-  // Four backward to up
-  for (int i = 180; i > 89; i--)
-  {
-    four.write(i);
-    delay(10);
-  }
-  delay(200);
+  
+  /* GRIPPER MOTOR CALIBRATION */
   // Five up to forward
   for (int i = 90; i > -1; i--)
   {
@@ -159,14 +164,12 @@ void setup()
   one.write(90);
   two.write(90);
   three.write(90);
-  four.write(90);
   five.write(90);
   delay(1000);
   // Detach to save power and allow human manipulation
   one.detach();
   two.detach();
   three.detach();
-  four.detach();
   five.detach();
   /*
   // Display minimums and maximums for analog feedback
@@ -183,21 +186,19 @@ void setup()
   Serial.println(minFeedThree);
   Serial.print("Three Max: ");
   Serial.println(maxFeedThree);
-  Serial.print("Four Min: ");
-  Serial.println(minFeedFour);
-  Serial.print("Four Max: ");
-  Serial.println(maxFeedFour);
-  Serial.print("Five Min: ");
+  Serial.print("Gripper Min: ");
   Serial.println(minFeedFive);
-  Serial.print("Five Max: ");
+  Serial.print("Gripper Max: ");
   Serial.println(maxFeedFive);
   Serial.println();
   */
+  
+  //  Quickly blink led 3 times to note to user that setup is complete 
   for (int i = 0; i < 3; i++)
   {
-    digitalWrite(13, HIGH);
+    digitalWrite(led, HIGH);
     delay(100);
-    digitalWrite(13, LOW);
+    digitalWrite(led, LOW);
     delay(100);
   }
 }
@@ -205,12 +206,12 @@ void setup()
 void loop()
 {
   delay(100);
-  if (digitalRead(7))
+  if (digitalRead(recordButton))       // detect if record button is pressed
   {
     recorded = true;
-    digitalWrite(13, HIGH);
+    digitalWrite(led, HIGH);           // led is on while recording
     delay(1000);
-    while (!digitalRead(7))
+    while (!digitalRead(recordButton)) // while the record button is not pressed
     {
       delay(50);
       int posOne = map(analogRead(1), minFeedOne, maxFeedOne, minDegOne, maxDegOne);
@@ -225,15 +226,11 @@ void loop()
       posThree = constrain(posThree, 0, 180);
       EEPROM.write(addr, posThree);
       addr++;
-      int posFour = map(analogRead(4), minFeedFour, maxFeedFour, minDegFour, maxDegFour);
-      posFour = constrain(posFour, 0, 180);
-      EEPROM.write(addr, posFour);
-      addr++;
       int posFive = map(analogRead(5), minFeedFive, maxFeedFive, minDegFive, maxDegFive);
       posFive = constrain(posFive, 0, 180);
       EEPROM.write(addr, posFive);
       addr++;
-      if (addr == 512)
+      if (addr == 512)                 // Reached the final byte of EEPROM memory, so write the end value
       {
         EEPROM.write(addr, 255);
         break;
@@ -248,29 +245,25 @@ void loop()
       Serial.print("\t");
       Serial.print(posThree);
       Serial.print("\t");
-      Serial.print(posFour);
-      Serial.print("\t");
       Serial.print(posFive);
       Serial.println();
       */
     }
-    EEPROM.write(addr, 255);
+    EEPROM.write(addr, 255); // write end value
   }
-  if (recorded || digitalRead(6))
+  if (recorded || digitalRead(replayButton))
   {
-    digitalWrite(13, LOW);
+    digitalWrite(led, LOW);
     // Power up servos
     one.attach(8);
     two.attach(9);
     three.attach(10);
-    four.attach(11);
-    five.attach(12);
+    five.attach(11);
     delay(1000);
     // Center servos
     one.write(90);
     two.write(90);
     three.write(90);
-    four.write(90);
     five.write(90);
     delay(1000);
     // Start playback
@@ -278,19 +271,16 @@ void loop()
     while (1)
     {
       posOne = EEPROM.read(addr);
-      posOne1 = EEPROM.read(addr+5);
+      posOne1 = EEPROM.read(addr+4);
       addr++;
       posTwo = EEPROM.read(addr);
-      posTwo1 = EEPROM.read(addr+5);
+      posTwo1 = EEPROM.read(addr+4);
       addr++;
       posThree = EEPROM.read(addr);
-      posThree1 = EEPROM.read(addr+5);
-      addr++;
-      posFour = EEPROM.read(addr);
-      posFour1 = EEPROM.read(addr+5);
+      posThree1 = EEPROM.read(addr+4);
       addr++;
       posFive = EEPROM.read(addr);
-      posFive1 = EEPROM.read(addr+5);
+      posFive1 = EEPROM.read(addr+4);
       addr++;
       /*
       // Display positions being written to the servos
@@ -307,10 +297,6 @@ void loop()
       Serial.print(posThree);
       Serial.print("\t\t");
       Serial.println(posThree1);
-      Serial.print("Four: ");
-      Serial.print(posFour);
-      Serial.print("\t\t");
-      Serial.println(posFour1);
       Serial.print("Five: ");
       Serial.print(posFive);
       Serial.print("\t\t");
@@ -319,7 +305,7 @@ void loop()
       */
       
       // Check for the end of the recorded commands, if so then break out of the infinite loop
-      if ((posOne == 255) || (posOne1 == 255) || (posTwo == 255) || (posTwo1 == 255) || (posThree == 255) || (posThree1 == 255) || (posFour == 255) || (posFour1 == 255) || (posFive == 255) || (posFive1 == 255))
+      if ((posOne == 255) || (posOne1 == 255) || (posTwo == 255) || (posTwo1 == 255) || (posThree == 255) || (posThree1 == 255) || (posFive == 255) || (posFive1 == 255))
       {
         break;
       }
@@ -373,22 +359,6 @@ void loop()
           delay(5);
         }
       }
-      if ((posFour1 - posFour) > 0)
-      {
-        for (int i = posFour; i < posFour1; i++)
-        {
-          four.write(i);
-          delay(5);
-        }
-      }   
-      else if ((posFour1 - posFour) < 0)
-      {
-        for (int i = posFour; i > posFour1; i--)
-        {
-          four.write(i);
-          delay(5);
-        }
-      }
       if ((posFive1 - posFive) > 0)
       {
         for (int i = posFive; i < posFive1; i++)
@@ -413,21 +383,19 @@ void loop()
     one.write(90);
     two.write(90);
     three.write(90);
-    four.write(90);
     five.write(90);
     delay(1000);
     // Detach them to save power and allow human manipulation
     one.detach();
     two.detach();
     three.detach();
-    four.detach();
     five.detach();
     // Flash the LED to let user know replay is completed
     for (int i = 0; i < 3; i++)
     {
-      digitalWrite(13, HIGH);
+      digitalWrite(led, HIGH);
       delay(100);
-      digitalWrite(13, LOW);
+      digitalWrite(led, LOW);
       delay(100);
     }
   }
